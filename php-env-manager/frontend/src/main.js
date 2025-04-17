@@ -1,22 +1,20 @@
 import { createApp } from 'vue'
+import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
-import store from './store'
+import './assets/styles/index.css'
 
 // 引入ElementPlus
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
-import zhCn from 'element-plus/es/locale/lang/zh-cn'
-
-// 引入全局样式
-import './styles/index.css'
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 
 // 创建应用实例
 const app = createApp(App)
 
 // 使用插件
 app.use(router)
-app.use(store)
+app.use(createPinia())
 app.use(ElementPlus, {
   locale: zhCn,
   size: 'default'
