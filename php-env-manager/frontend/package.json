@@ -4,9 +4,10 @@
   "description": "PHP环境管理器",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
-    "dev": "vite",
+    "start": "electron-vite dev",
+    "dev": "vite --host",
     "build": "vite build",
+    "preview": "vite preview",
     "package-win": "electron-packager . php-env-manager --platform=win32 --arch=x64 --icon=public/favicon.ico --out=dist/ --asar --overwrite",
     "package-linux": "electron-packager . php-env-manager --platform=linux --arch=x64 --icon=public/favicon.png --out=dist/ --asar --overwrite"
   },
