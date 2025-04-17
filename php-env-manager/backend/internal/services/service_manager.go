@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/qqw1150/phpmaster/internal/config"
+	"github.com/qqw1150/php-env-manager/internal/config"
 )
 
 // 定义错误

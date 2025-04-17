@@ -3,7 +3,7 @@
     <!-- 侧边栏 -->
     <div class="sidebar">
       <div class="logo-container">
-        <img src="./assets/logo.png" alt="PHP环境管理器" class="logo">
+        <img src="./assets/logo.svg" alt="PHP环境管理器" class="logo">
         <h1 class="app-name">PHP环境管理器</h1>
       </div>
       <el-menu

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .php { font-family: Arial, sans-serif; font-weight: bold; font-size: 65px; }
+    .env { font-family: Arial, sans-serif; font-size: 26px; fill: #666666; }
+  </style>
+  <circle cx="100" cy="100" r="90" fill="#8892BF" />
+  <circle cx="100" cy="100" r="80" fill="#4F5B93" />
+  <text x="50" y="115" class="php" fill="#FFFFFF">PHP</text>
+  <text x="70" y="140" class="env" fill="#FFFFFF">环境管理器</text>
+</svg> 

@@ -22,10 +22,14 @@ function createWindow() {
     }
   });
 
+  // 设置环境变量以便于区分开发和生产环境
+  // 通过检查dist目录是否存在来确定
+  const isDev = !require('fs').existsSync(path.join(__dirname, 'dist', 'index.html'));
+  
   // 加载应用的index.html
   // 本地开发环境使用http://localhost:5173
   // 打包后使用file://协议加载HTML文件
-  const startUrl = process.env.NODE_ENV === 'development' 
+  const startUrl = isDev
     ? 'http://localhost:5173' 
     : url.format({
         pathname: path.join(__dirname, './dist/index.html'),
@@ -33,10 +37,13 @@ function createWindow() {
         slashes: true
       });
   
+  console.log('当前环境:', isDev ? '开发环境' : '生产环境');
+  console.log('加载URL:', startUrl);
+  
   mainWindow.loadURL(startUrl);
 
   // 打开开发者工具
-  if (process.env.NODE_ENV === 'development') {
+  if (isDev) {
     mainWindow.webContents.openDevTools();
   }
 
