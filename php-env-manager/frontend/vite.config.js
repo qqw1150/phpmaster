@@ -33,5 +33,10 @@ export default defineConfig({
     }
   },
   root: './',
-  publicDir: 'public'
+  publicDir: 'public',
+  // 定义环境变量
+  define: {
+    'process.env.IS_BROWSER': JSON.stringify(true),
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development')
+  }
 }); 

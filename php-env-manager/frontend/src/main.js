@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import './assets/styles/index.css'
+import './assets/base.css'
 
 // 引入ElementPlus
 import ElementPlus from 'element-plus'
@@ -32,13 +33,29 @@ app.config.globalProperties.$isDev = process.env.NODE_ENV === 'development'
 // 挂载应用
 app.mount('#app')
 
-// 初始化与后端通信
-if (window.phpEnvManager) {
-  // 通知后端应用已就绪
-  window.phpEnvManager.system.appReady()
-  
-  // 开发环境下打印可用的后端API
-  if (process.env.NODE_ENV === 'development') {
-    console.log('可用的后端API:', window.phpEnvManager)
+// 确定运行环境
+const isElectron = window?.phpEnvManager && typeof window?.phpEnvManager?.system?.appReady === 'function';
+console.log(`应用运行环境: ${isElectron ? 'Electron' : '浏览器'}`);
+
+// 初始化应用
+try {
+  if (isElectron) {
+    // Electron环境
+    window.phpEnvManager.system.appReady()
+      .then(response => {
+        if (response && response.success) {
+          console.log('后端服务初始化成功');
+        } else {
+          console.warn('后端服务初始化可能存在问题:', response);
+        }
+      })
+      .catch(error => {
+        console.error('后端服务初始化失败:', error);
+      });
+  } else {
+    // 浏览器环境
+    console.log('在浏览器环境中运行，使用模拟后端');
   }
+} catch (error) {
+  console.error('应用初始化过程中出现错误:', error);
 } 

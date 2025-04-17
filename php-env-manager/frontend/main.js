@@ -69,6 +69,30 @@ app.on('activate', function () {
 
 // 在这里可以添加主进程的其他代码
 
+// 添加同步IPC处理程序用于获取应用是否打包的信息
+ipcMain.on('is-app-packaged', (event) => {
+  event.returnValue = app.isPackaged;
+});
+
+// 应用准备就绪处理程序
+ipcMain.handle('app-ready', async () => {
+  console.log('App ready signal received from renderer process');
+  return { success: true, message: 'App is ready' };
+});
+
+// 获取系统信息
+ipcMain.handle('get-system-info', async () => {
+  console.log('Getting system info');
+  // 返回模拟系统信息
+  return {
+    os: process.platform === 'win32' ? 'Windows' : process.platform,
+    release: require('os').release(),
+    uptime: `${Math.floor(require('os').uptime() / 86400)}天${Math.floor((require('os').uptime() % 86400) / 3600)}小时${Math.floor((require('os').uptime() % 3600) / 60)}分钟`,
+    cpu: `${require('os').cpus().length} Core`,
+    memory: `${Math.round(require('os').totalmem() / (1024 * 1024 * 1024))}GB`
+  };
+});
+
 // 示例IPC通信
 ipcMain.handle('get-service-status', async () => {
   // 此处应与后端通信获取服务状态
