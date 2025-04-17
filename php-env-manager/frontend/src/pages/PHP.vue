@@ -3,10 +3,10 @@
     <div class="page-header">
       <h1>PHP管理</h1>
       <div class="page-tools">
-        <el-button type="primary" @click="installPHP">
+        <el-button type="primary" @click="showInstallDialog">
           <el-icon><Plus /></el-icon>安装PHP版本
         </el-button>
-        <el-button type="success" @click="refreshPHPInfo">
+        <el-button type="success" @click="refreshPHPInfo" :loading="loading">
           <el-icon><Refresh /></el-icon>刷新
         </el-button>
       </div>
@@ -21,7 +21,16 @@
             </div>
           </template>
           
-          <el-table :data="phpVersions" border stripe style="width: 100%">
+          <div v-if="loading" class="loading-container">
+            <el-icon class="loading-icon"><Loading /></el-icon>
+            <span>正在加载PHP版本信息...</span>
+          </div>
+          
+          <el-empty v-else-if="phpVersions.length === 0" description="暂无已安装的PHP版本">
+            <el-button type="primary" @click="showInstallDialog">安装PHP版本</el-button>
+          </el-empty>
+          
+          <el-table v-else :data="phpVersions" border stripe style="width: 100%">
             <el-table-column prop="version" label="PHP版本" min-width="120" />
             <el-table-column prop="path" label="安装路径" min-width="250" show-overflow-tooltip />
             <el-table-column prop="extensions" label="已装扩展数" width="120" />
@@ -32,6 +41,7 @@
                   v-else 
                   size="small" 
                   @click="setDefaultVersion(scope.row)"
+                  :loading="scope.row.loading"
                 >
                   设为默认
                 </el-button>
@@ -50,6 +60,7 @@
                   size="small" 
                   type="primary" 
                   @click="viewPHPInfo(scope.row)"
+                  :loading="scope.row.loading"
                 >
                   phpinfo
                 </el-button>
@@ -57,6 +68,7 @@
                   size="small" 
                   type="success" 
                   @click="editConfig(scope.row)"
+                  :loading="scope.row.loading"
                 >
                   配置文件
                 </el-button>
@@ -64,6 +76,7 @@
                   size="small" 
                   type="warning" 
                   @click="togglePHPStatus(scope.row)"
+                  :loading="scope.row.loading"
                 >
                   {{ scope.row.enabled ? '禁用' : '启用' }}
                 </el-button>
@@ -71,6 +84,8 @@
                   size="small" 
                   type="danger" 
                   @click="uninstallPHP(scope.row)"
+                  :loading="scope.row.loading"
+                  :disabled="scope.row.isDefault"
                 >
                   卸载
                 </el-button>
@@ -90,12 +105,14 @@
                   v-model="selectedVersion" 
                   placeholder="选择PHP版本" 
                   style="margin-left: 15px; width: 150px"
+                  @change="handleVersionChange"
                 >
                   <el-option 
                     v-for="version in phpVersions" 
                     :key="version.version" 
                     :label="version.version" 
                     :value="version.version" 
+                    :disabled="!version.enabled"
                   />
                 </el-select>
               </div>
@@ -113,15 +130,41 @@
           </template>
           
           <div class="extension-actions">
-            <el-button type="primary" @click="installExtension">
+            <el-button 
+              type="primary" 
+              @click="showExtensionInstallDialog" 
+              :disabled="!selectedVersion || loading"
+            >
               <el-icon><Plus /></el-icon>安装扩展
             </el-button>
-            <el-button type="success" @click="refreshExtensions">
+            <el-button 
+              type="success" 
+              @click="refreshExtensions" 
+              :loading="extensionsLoading"
+              :disabled="!selectedVersion"
+            >
               <el-icon><Refresh /></el-icon>刷新扩展列表
             </el-button>
           </div>
           
-          <el-table :data="filteredExtensions" border stripe style="width: 100%">
+          <div v-if="extensionsLoading" class="loading-container">
+            <el-icon class="loading-icon"><Loading /></el-icon>
+            <span>正在加载扩展信息...</span>
+          </div>
+          
+          <el-empty 
+            v-else-if="!selectedVersion" 
+            description="请先选择一个PHP版本"
+          />
+          
+          <el-empty 
+            v-else-if="extensions.length === 0" 
+            description="暂无扩展"
+          >
+            <el-button type="primary" @click="showExtensionInstallDialog">安装扩展</el-button>
+          </el-empty>
+          
+          <el-table v-else :data="filteredExtensions" border stripe style="width: 100%">
             <el-table-column prop="name" label="扩展名称" min-width="150" />
             <el-table-column prop="version" label="版本" width="120" />
             <el-table-column prop="description" label="描述" min-width="250" show-overflow-tooltip />
@@ -138,6 +181,7 @@
                   size="small" 
                   :type="scope.row.enabled ? 'warning' : 'success'" 
                   @click="toggleExtension(scope.row)"
+                  :loading="scope.row.loading"
                 >
                   {{ scope.row.enabled ? '禁用' : '启用' }}
                 </el-button>
@@ -145,6 +189,7 @@
                   size="small" 
                   type="danger" 
                   @click="uninstallExtension(scope.row)"
+                  :loading="scope.row.loading"
                 >
                   卸载
                 </el-button>
@@ -154,112 +199,78 @@
         </el-card>
       </el-tab-pane>
     </el-tabs>
+    
+    <!-- PHP安装对话框 -->
+    <PHPInstallDialog
+      v-model:visible="installDialogVisible"
+      @installed="handlePHPInstalled"
+    />
+    
+    <!-- 扩展安装对话框 -->
+    <ExtensionInstallDialog
+      v-model:visible="extensionInstallDialogVisible"
+      :pre-selected-php-version="selectedVersion"
+      @installed="handleExtensionInstalled"
+    />
+    
+    <!-- PHP配置编辑器 -->
+    <PHPConfigEditor
+      v-if="configEditorVisible"
+      v-model:visible="configEditorVisible"
+      :php-version="currentEditingPHP"
+      :title="`${currentEditingPHP} 配置编辑器`"
+      @saved="handleConfigSaved"
+    />
+    
+    <!-- PHP信息查看器 -->
+    <PHPInfoViewer
+      v-if="phpInfoViewerVisible"
+      v-model:visible="phpInfoViewerVisible"
+      :php-version="currentViewingPHP"
+      :php-info-url="phpInfoUrl"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Refresh, Search } from '@element-plus/icons-vue';
+import { Plus, Refresh, Search, Loading } from '@element-plus/icons-vue';
+import { phpAPI, extensionAPI } from '../services/api';
+import PHPInstallDialog from '../components/PHPInstallDialog.vue';
+import ExtensionInstallDialog from '../components/ExtensionInstallDialog.vue';
+import PHPConfigEditor from '../components/PHPConfigEditor.vue';
+import PHPInfoViewer from '../components/PHPInfoViewer.vue';
 
 // 当前活动Tab
 const activeTab = ref('versions');
 
+// 加载状态
+const loading = ref(false);
+const extensionsLoading = ref(false);
+
 // PHP版本列表
-const phpVersions = ref([
-  {
-    version: 'PHP 8.2.0',
-    path: 'D:\\phpmaster\\php\\8.2.0',
-    extensions: 35,
-    isDefault: true,
-    enabled: true
-  },
-  {
-    version: 'PHP 8.1.12',
-    path: 'D:\\phpmaster\\php\\8.1.12',
-    extensions: 32,
-    isDefault: false,
-    enabled: true
-  },
-  {
-    version: 'PHP 7.4.30',
-    path: 'D:\\phpmaster\\php\\7.4.30',
-    extensions: 28,
-    isDefault: false,
-    enabled: true
-  },
-  {
-    version: 'PHP 7.3.33',
-    path: 'D:\\phpmaster\\php\\7.3.33',
-    extensions: 25,
-    isDefault: false,
-    enabled: false
-  }
-]);
+const phpVersions = ref([]);
 
 // 当前选择的PHP版本（用于扩展管理）
-const selectedVersion = ref('PHP 8.2.0');
+const selectedVersion = ref('');
 
 // 扩展搜索关键词
 const extensionSearchQuery = ref('');
 
 // PHP扩展列表
-const extensions = ref([
-  {
-    name: 'mysqli',
-    version: '8.2.0',
-    description: 'MySQL改进版扩展',
-    enabled: true
-  },
-  {
-    name: 'pdo_mysql',
-    version: '8.2.0',
-    description: 'MySQL PDO驱动',
-    enabled: true
-  },
-  {
-    name: 'mbstring',
-    version: '8.2.0',
-    description: '多字节字符串扩展',
-    enabled: true
-  },
-  {
-    name: 'openssl',
-    version: '8.2.0',
-    description: 'OpenSSL扩展',
-    enabled: true
-  },
-  {
-    name: 'gd',
-    version: '8.2.0',
-    description: 'GD图形库',
-    enabled: true
-  },
-  {
-    name: 'curl',
-    version: '8.2.0',
-    description: 'cURL支持',
-    enabled: true
-  },
-  {
-    name: 'zip',
-    version: '8.2.0',
-    description: 'Zip压缩支持',
-    enabled: true
-  },
-  {
-    name: 'redis',
-    version: '5.3.7',
-    description: 'Redis缓存支持',
-    enabled: false
-  },
-  {
-    name: 'xdebug',
-    version: '3.1.5',
-    description: '调试和性能分析工具',
-    enabled: false
-  }
-]);
+const extensions = ref([]);
+
+// 对话框控制
+const installDialogVisible = ref(false);
+const extensionInstallDialogVisible = ref(false);
+const configEditorVisible = ref(false);
+const phpInfoViewerVisible = ref(false);
+
+// 当前编辑/查看的PHP版本
+const currentEditingPHP = ref('');
+const currentViewingPHP = ref('');
+const phpInfoUrl = ref('');
 
 // 根据当前选择的PHP版本和搜索关键词过滤扩展列表
 const filteredExtensions = computed(() => {
@@ -276,236 +287,321 @@ const filteredExtensions = computed(() => {
   return result;
 });
 
-// 监听选择的PHP版本变化，更新扩展列表
+// 监听选择的PHP版本变化
 watch(selectedVersion, (newValue) => {
-  // 实际应用中，这里应该根据选择的PHP版本加载对应的扩展列表
-  ElMessage.info(`已切换到 ${newValue} 的扩展列表`);
-  
-  // 模拟加载不同版本的扩展
-  if (newValue === 'PHP 7.3.33') {
-    extensions.value = extensions.value.filter(ext => ext.name !== 'redis');
-    extensions.value.forEach(ext => {
-      ext.version = '7.3.33';
-    });
-  } else if (newValue === 'PHP 7.4.30') {
-    extensions.value.forEach(ext => {
-      ext.version = '7.4.30';
-    });
+  if (newValue) {
+    loadExtensions(newValue);
   } else {
-    // 恢复默认扩展列表
-    refreshExtensions();
+    extensions.value = [];
   }
 });
 
-// 安装新的PHP版本
-const installPHP = () => {
-  ElMessage.info('打开PHP版本安装向导');
-  // 这里应该打开PHP版本安装向导对话框
+// 加载PHP版本列表
+const loadPHPVersions = async () => {
+  loading.value = true;
+  try {
+    const response = await phpAPI.getVersions();
+    phpVersions.value = response || [];
+    
+    // 如果没有选中的版本但有可用版本，默认选择启用的第一个版本
+    if (!selectedVersion.value && phpVersions.value.length > 0) {
+      const enabledVersion = phpVersions.value.find(v => v.enabled);
+      if (enabledVersion) {
+        selectedVersion.value = enabledVersion.version;
+      }
+    }
+  } catch (error) {
+    ElMessage.error('加载PHP版本列表失败: ' + (error.message || '未知错误'));
+    phpVersions.value = [];
+  } finally {
+    loading.value = false;
+  }
+};
+
+// 加载扩展列表
+const loadExtensions = async (phpVersion) => {
+  if (!phpVersion) return;
+  
+  extensionsLoading.value = true;
+  try {
+    const response = await extensionAPI.getExtensions(phpVersion);
+    extensions.value = response || [];
+  } catch (error) {
+    ElMessage.error('加载扩展列表失败: ' + (error.message || '未知错误'));
+    extensions.value = [];
+  } finally {
+    extensionsLoading.value = false;
+  }
 };
 
 // 刷新PHP信息
-const refreshPHPInfo = () => {
-  ElMessage.info('正在刷新PHP信息...');
-  // 这里应该调用获取PHP信息的API
-  setTimeout(() => {
-    ElMessage.success('PHP信息已更新');
-  }, 1000);
+const refreshPHPInfo = async () => {
+  await loadPHPVersions();
+  ElMessage.success('PHP信息已更新');
+};
+
+// 处理PHP版本变化
+const handleVersionChange = (newVersion) => {
+  selectedVersion.value = newVersion;
+};
+
+// 刷新扩展列表
+const refreshExtensions = async () => {
+  if (!selectedVersion.value) {
+    ElMessage.warning('请先选择一个PHP版本');
+    return;
+  }
+  
+  await loadExtensions(selectedVersion.value);
+  ElMessage.success('扩展列表已更新');
+};
+
+// 显示PHP安装对话框
+const showInstallDialog = () => {
+  installDialogVisible.value = true;
+};
+
+// 显示扩展安装对话框
+const showExtensionInstallDialog = () => {
+  if (!selectedVersion.value) {
+    ElMessage.warning('请先选择一个PHP版本');
+    return;
+  }
+  
+  extensionInstallDialogVisible.value = true;
 };
 
 // 查看PHP信息
 const viewPHPInfo = (php) => {
-  ElMessage.info(`查看 ${php.version} 的phpinfo页面`);
-  // 这里应该打开phpinfo页面
-  window.open(`/phpinfo.php?version=${php.version}`, '_blank');
+  setRowLoading(php, true);
+  
+  currentViewingPHP.value = php.version;
+  
+  // 如果后端提供了直接访问phpinfo的URL，使用URL方式
+  // phpInfoUrl.value = `/api/php/versions/${encodeURIComponent(php.version)}/phpinfo`;
+  phpInfoUrl.value = ''; // 不使用URL方式，而是通过API获取HTML
+  
+  phpInfoViewerVisible.value = true;
+  
+  setRowLoading(php, false);
 };
 
 // 编辑PHP配置文件
 const editConfig = (php) => {
-  ElMessage.info(`编辑 ${php.version} 的配置文件`);
-  // 这里应该打开配置文件编辑器
+  setRowLoading(php, true);
+  
+  currentEditingPHP.value = php.version;
+  configEditorVisible.value = true;
+  
+  setRowLoading(php, false);
 };
 
 // 切换PHP版本的启用状态
-const togglePHPStatus = (php) => {
+const togglePHPStatus = async (php) => {
   const newStatus = !php.enabled;
   const action = newStatus ? '启用' : '禁用';
   
-  ElMessageBox.confirm(
-    `确定要${action} ${php.version} 吗？`,
-    `${action}确认`,
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(() => {
-    // 这里应该调用API来启用/禁用PHP版本
+  try {
+    await ElMessageBox.confirm(
+      `确定要${action} ${php.version} 吗？`,
+      `${action}确认`,
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    );
+    
+    setRowLoading(php, true);
+    
+    // 调用API切换状态
+    await phpAPI.toggleVersionStatus(php.version, newStatus);
+    
+    // 更新本地状态
     php.enabled = newStatus;
     ElMessage.success(`${php.version} 已${action}`);
-  }).catch(() => {
-    // 取消操作
-  });
+    
+    // 如果禁用了当前选中的扩展管理版本，需要重置
+    if (!newStatus && selectedVersion.value === php.version) {
+      selectedVersion.value = '';
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(`${action}失败: ${error.message || '未知错误'}`);
+    }
+  } finally {
+    setRowLoading(php, false);
+  }
 };
 
 // 设置默认PHP版本
-const setDefaultVersion = (php) => {
-  ElMessageBox.confirm(
-    `确定要将 ${php.version} 设置为默认PHP版本吗？`,
-    '设置默认版本',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(() => {
-    // 这里应该调用API来设置默认PHP版本
+const setDefaultVersion = async (php) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要将 ${php.version} 设置为默认PHP版本吗？`,
+      '设置默认版本',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    );
+    
+    setRowLoading(php, true);
+    
+    // 调用API设置默认版本
+    await phpAPI.setDefaultVersion(php.version);
+    
+    // 更新本地状态
     phpVersions.value.forEach(v => {
       v.isDefault = v.version === php.version;
     });
+    
     ElMessage.success(`${php.version} 已设置为默认PHP版本`);
-  }).catch(() => {
-    // 取消操作
-  });
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(`设置默认版本失败: ${error.message || '未知错误'}`);
+    }
+  } finally {
+    setRowLoading(php, false);
+  }
 };
 
 // 卸载PHP版本
-const uninstallPHP = (php) => {
+const uninstallPHP = async (php) => {
   if (php.isDefault) {
     ElMessage.error('无法卸载默认PHP版本，请先设置其他版本为默认');
     return;
   }
   
-  ElMessageBox.confirm(
-    `确定要卸载 ${php.version} 吗？这将删除该版本的所有文件和配置。`,
-    '卸载确认',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'danger'
-    }
-  ).then(() => {
-    // 这里应该调用卸载API
+  try {
+    await ElMessageBox.confirm(
+      `确定要卸载 ${php.version} 吗？这将删除该版本的所有文件和配置。`,
+      '卸载确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'danger'
+      }
+    );
+    
+    setRowLoading(php, true);
+    
+    // 调用卸载API
+    await phpAPI.uninstallVersion(php.version);
+    
+    // 从列表中移除
     phpVersions.value = phpVersions.value.filter(v => v.version !== php.version);
-    ElMessage.success(`${php.version} 已成功卸载`);
-  }).catch(() => {
-    // 取消操作
-  });
-};
-
-// 安装PHP扩展
-const installExtension = () => {
-  ElMessage.info(`为 ${selectedVersion.value} 安装新扩展`);
-  // 这里应该打开扩展安装向导对话框
-};
-
-// 刷新扩展列表
-const refreshExtensions = () => {
-  ElMessage.info('正在刷新扩展列表...');
-  // 这里应该调用API获取扩展列表
-  
-  // 模拟恢复默认扩展列表
-  extensions.value = [
-    {
-      name: 'mysqli',
-      version: '8.2.0',
-      description: 'MySQL改进版扩展',
-      enabled: true
-    },
-    {
-      name: 'pdo_mysql',
-      version: '8.2.0',
-      description: 'MySQL PDO驱动',
-      enabled: true
-    },
-    {
-      name: 'mbstring',
-      version: '8.2.0',
-      description: '多字节字符串扩展',
-      enabled: true
-    },
-    {
-      name: 'openssl',
-      version: '8.2.0',
-      description: 'OpenSSL扩展',
-      enabled: true
-    },
-    {
-      name: 'gd',
-      version: '8.2.0',
-      description: 'GD图形库',
-      enabled: true
-    },
-    {
-      name: 'curl',
-      version: '8.2.0',
-      description: 'cURL支持',
-      enabled: true
-    },
-    {
-      name: 'zip',
-      version: '8.2.0',
-      description: 'Zip压缩支持',
-      enabled: true
-    },
-    {
-      name: 'redis',
-      version: '5.3.7',
-      description: 'Redis缓存支持',
-      enabled: false
-    },
-    {
-      name: 'xdebug',
-      version: '3.1.5',
-      description: '调试和性能分析工具',
-      enabled: false
+    
+    // 如果卸载的是当前选中的扩展管理版本，需要重置
+    if (selectedVersion.value === php.version) {
+      selectedVersion.value = '';
     }
-  ];
-  
-  setTimeout(() => {
-    ElMessage.success('扩展列表已更新');
-  }, 1000);
+    
+    ElMessage.success(`${php.version} 已成功卸载`);
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(`卸载失败: ${error.message || '未知错误'}`);
+    }
+  } finally {
+    setRowLoading(php, false);
+  }
 };
 
 // 切换扩展启用状态
-const toggleExtension = (extension) => {
+const toggleExtension = async (extension) => {
   const newStatus = !extension.enabled;
   const action = newStatus ? '启用' : '禁用';
   
-  ElMessageBox.confirm(
-    `确定要${action}扩展 ${extension.name} 吗？`,
-    `${action}确认`,
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(() => {
-    // 这里应该调用API来启用/禁用扩展
+  try {
+    await ElMessageBox.confirm(
+      `确定要${action}扩展 ${extension.name} 吗？`,
+      `${action}确认`,
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    );
+    
+    setRowLoading(extension, true);
+    
+    // 调用API切换状态
+    await extensionAPI.toggleExtensionStatus(selectedVersion.value, extension.name, newStatus);
+    
+    // 更新本地状态
     extension.enabled = newStatus;
     ElMessage.success(`扩展 ${extension.name} 已${action}`);
-  }).catch(() => {
-    // 取消操作
-  });
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(`${action}扩展失败: ${error.message || '未知错误'}`);
+    }
+  } finally {
+    setRowLoading(extension, false);
+  }
 };
 
 // 卸载扩展
-const uninstallExtension = (extension) => {
-  ElMessageBox.confirm(
-    `确定要卸载扩展 ${extension.name} 吗？`,
-    '卸载确认',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'danger'
-    }
-  ).then(() => {
-    // 这里应该调用API来卸载扩展
+const uninstallExtension = async (extension) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要卸载扩展 ${extension.name} 吗？`,
+      '卸载确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'danger'
+      }
+    );
+    
+    setRowLoading(extension, true);
+    
+    // 调用API卸载扩展
+    await extensionAPI.uninstallExtension(selectedVersion.value, extension.name);
+    
+    // 从列表中移除
     extensions.value = extensions.value.filter(ext => ext.name !== extension.name);
+    
     ElMessage.success(`扩展 ${extension.name} 已成功卸载`);
-  }).catch(() => {
-    // 取消操作
-  });
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(`卸载扩展失败: ${error.message || '未知错误'}`);
+    }
+  } finally {
+    setRowLoading(extension, false);
+  }
 };
+
+// 处理PHP安装完成
+const handlePHPInstalled = (phpInfo) => {
+  // 刷新PHP版本列表
+  loadPHPVersions();
+  ElMessage.success(`${phpInfo.version} 安装成功`);
+};
+
+// 处理扩展安装完成
+const handleExtensionInstalled = (extensionInfo) => {
+  // 刷新扩展列表
+  if (selectedVersion.value === extensionInfo.phpVersion) {
+    loadExtensions(selectedVersion.value);
+  }
+  ElMessage.success(`扩展 ${extensionInfo.extensionName} 安装成功`);
+};
+
+// 处理配置保存完成
+const handleConfigSaved = () => {
+  ElMessage.success('配置保存成功');
+};
+
+// 设置行加载状态（用于按钮loading效果）
+const setRowLoading = (row, isLoading) => {
+  row.loading = isLoading;
+};
+
+// 组件挂载时加载数据
+onMounted(() => {
+  loadPHPVersions();
+});
 </script>
 
 <style scoped>
@@ -551,5 +647,29 @@ const uninstallExtension = (extension) => {
   margin-bottom: 15px;
   display: flex;
   gap: 10px;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
+  color: #909399;
+}
+
+.loading-icon {
+  font-size: 24px;
+  margin-bottom: 10px;
+  animation: rotating 2s linear infinite;
+}
+
+@keyframes rotating {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style> 
