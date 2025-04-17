@@ -1,10 +1,11 @@
-﻿{
+{
   "name": "php-env-manager",
   "version": "1.0.0",
   "description": "PHP环境管理器",
   "main": "main.js",
   "scripts": {
-    "start": "electron-vite dev",
+    "start": "vite --host",
+    "electron": "electron-vite dev",
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
@@ -22,6 +23,7 @@
     "@vitejs/plugin-vue": "^4.2.3",
     "electron": "^25.3.1",
     "electron-packager": "^17.1.1",
+    "electron-vite": "^3.1.0",
     "vite": "^4.4.7"
   },
   "dependencies": {
